@@ -1,25 +1,39 @@
 # SSH Chat Server
 
-A secure, private chat server that leverages Tailscale's zero-trust network for authentication and encryption.
+A secure, terminal-based chat server that uses SSH for connections. Built with Go, it provides a simple, no-client-required chat experience where users connect directly via their SSH client.
 
-## ✨ Features
+## Features
 
-- 🔒 **Zero-trust security** - Tailscale authentication & encryption
-- 🌐 **Private networking** - Only accessible via your Tailscale network
-- 👥 **Real-time messaging** - Instant message broadcasting
-- 📋 **User management** - See who's online with `/list`
+- **SSH-native** - No special client needed, just use `ssh` command
+- **Real-time messaging** - Instant message broadcasting to all connected users
+- **Persistent chat history** - View last 50 messages when joining (configurable)
+- **User presence** - See who's online with `/list` command
+- **Join/leave notifications** - Know when users enter or leave the chat
+- **Secure by default** - Works seamlessly with Tailscale for zero-trust networking
+- **Configurable** - Environment variables for port, bind address, and logging
+- **Graceful shutdown** - Clean disconnection handling
+- **Lightweight** - Single binary, minimal dependencies
 
-## 🛠️ Installation
+## Self-Hosting
 
-### Prerequisites
-- Go 1.21+
-- Tailscale client installed and running
-- Your devices connected to the same Tailscale network
+### Option 1: Local Installation
 
-### Build & Run
+#### Prerequisites
+- Go 1.21 or higher
+- SSH client (for connecting)
+
+#### Build & Run
+
 ```bash
-# Clone and build
+
+git clone https://github.com/ramonidass/ssh-chat.git
+cd ssh-chat
+
+# Build the server
 go build -o ssh-chat-server cmd/server/main.go
+
+# Generate SSH host key (first time only)
+ssh-keygen -t rsa -f test_host_key -N ""
 
 # Run with default settings (port 8022)
 ./ssh-chat-server
@@ -28,7 +42,65 @@ go build -o ssh-chat-server cmd/server/main.go
 CHAT_PORT=9876 ./ssh-chat-server
 ```
 
-## ⚙️ Configuration
+### Option 2: Docker
+
+#### Using Docker
+
+```bash
+# Build the image
+docker build -t ssh-chat-server .
+
+# Run the container
+docker run -d \
+  --name ssh-chat \
+  -p 8022:8022 \
+  -v $(pwd)/logs:/app/logs \
+  -e CHAT_PORT=8022 \
+  ssh-chat-server
+```
+
+#### Using Docker Compose
+
+Create a `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  ssh-chat:
+    build: .
+    container_name: ssh-chat
+    ports:
+      - "8022:8022"
+    environment:
+      - CHAT_PORT=8022
+      - CHAT_LOG_FILE=/app/logs/chat.log
+    volumes:
+      - ./logs:/app/logs
+      - ./test_host_key:/app/test_host_key:ro
+    restart: unless-stopped
+```
+
+Then run:
+
+```bash
+# Create logs directory
+mkdir -p logs
+
+# Generate SSH host key if not exists
+[ -f test_host_key ] || ssh-keygen -t rsa -f test_host_key -N ""
+
+# Start the service
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the service
+docker-compose down
+```
+
+## Configuration
 
 ### Environment Variables
 
@@ -37,158 +109,205 @@ CHAT_PORT=9876 ./ssh-chat-server
 | `CHAT_PORT` | `8022` | Server port |
 | `CHAT_BIND` | `""` | Bind address (empty = all interfaces) |
 | `CHAT_LOG_FILE` | `secure_chat.log` | Chat log file path |
-| `CHAT_TAILSCALE_ONLY` | `true` | Restrict to Tailscale interfaces only |
 
 ### Examples
+
 ```bash
-# Use custom port and bind to Tailscale interface only
-CHAT_PORT=9876 CHAT_BIND=100.64.0.1 ./ssh-chat-server
+# Use custom port
+CHAT_PORT=9876 ./ssh-chat-server
+
+# Bind to specific IP only
+CHAT_BIND=192.168.1.100 ./ssh-chat-server
+
+# Custom log location
+CHAT_LOG_FILE=/var/log/ssh-chat.log ./ssh-chat-server
 
 # Disable logging
 CHAT_LOG_FILE=/dev/null ./ssh-chat-server
-
-# Bind to specific interface (your Tailscale IP)
-CHAT_BIND=100.123.45.67 ./ssh-chat-server
 ```
 
-## 🔗 Connecting to Your Chat Server
+## Connecting to Your Chat Server
 
-### Find Your Tailscale IP
+### Connect via SSH
+
 ```bash
-# On the server machine
-tailscale ip
-# Output: 100.123.45.67
+# Basic connection (replace with your server IP)
+ssh user@your-server-ip -p 8022
+
+# Example with custom username
+ssh alice@192.168.1.100 -p 8022
+
+# Use -t flag if you get PTY errors
+ssh -t user@your-server-ip -p 8022
 ```
 
-### Connect from any Tailscale device
-```bash
-# Replace with your server's Tailscale IP
-ssh user@100.123.45.67 -p 8022
-```
-
-### Connection Examples
-```bash
-# Connect as yourself (Tailscale username)
-ssh 100.123.45.67 -p 8022
-
-# Connect with a custom username (still authenticated by Tailscale)
-ssh mynickname@100.123.45.67 -p 8022
-```
-
-## 💬 Using the Chat
+## Using the Chat
 
 ### Available Commands
+
 - `/help` - Show available commands
 - `/list` - Show online users
 - `/quit` - Disconnect from chat
 
-## 🏗️ Architecture
+### Chat Features
+
+- **Join notifications** - See when users connect (`>>> alice joined.`)
+- **Leave notifications** - See when users disconnect (`<<< alice left.`)
+- **Chat history** - Last 50 messages shown when you join
+- **Broadcast messages** - All messages are sent to everyone
+
+### Example Session
+
+```
+💬 Encrypted and Private Chat Server /list
+
+📜 Recent Messages (last 3):
+[2024-02-09 14:32:10] alice: Hello everyone!
+[2024-02-09 14:33:22] bob: Hey alice, how are you?
+[2024-02-09 14:34:05] alice: Doing great, thanks!
+
+>>> charlie joined.
+> Hello all!
+[charlie]: Hello all!
+[alice]: Hi charlie!
+> /list
+
+👥 Online users (3):
+  1. alice
+  2. bob
+  3. charlie
+
+> /quit
+👋 Goodbye! Disconnecting...
+```
+
+## Architecture
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Tailscale     │────▶│   SSH Chat       │────▶│   Chat Hub      │
-│   Network       │     │   Server         │     │   (Broadcast)   │
-│   (Zero-trust)  │     │   (Port 8022)    │     │   (Real-time)   │
+│   SSH Client    │────▶│   SSH Chat       │────▶│   Chat Hub      │
+│   (Terminal)    │     │   Server         │     │   (Broadcast)   │
+│                 │     │   (Port 8022)    │     │   (Real-time)   │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
-       │                         │                         │
-       ▼                         ▼                         ▼
+        │                         │                         │
+        ▼                         ▼                         ▼
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   User Device   │◀────│   SSH Client     │◀────│   Other Users   │
-│   (Any device)  │     │   (Terminal)     │     │   (Tailscale)   │
+│   User Input    │◀────│   PTY Terminal   │◀────│   Message Log   │
+│   (Commands)    │     │   (Read/Write)   │     │   (History)     │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
 ```
 
-## 🔧 Network Configuration
+## Security
 
-### Tailscale-Only Access (Recommended)
+This server accepts any SSH key or password (PublicKeyHandler and PasswordHandler return true) because it's designed to run within a trusted network environment like:
+
+- **Tailscale** - Recommended for zero-trust networking
+- **Private LAN** - Local network behind a firewall
+- **VPN** - Within a virtual private network
+
+### Security Recommendations
+
 ```bash
-# Bind to your Tailscale interface only
+# Bind to localhost only (for reverse proxy setups)
+CHAT_BIND=127.0.0.1 ./ssh-chat-server
+
+# Bind to VPN/Tailscale interface only
 CHAT_BIND=100.64.0.1 ./ssh-chat-server
-```
 
-### Find Your Tailscale Interface
-```bash
-# List all interfaces
-ip addr show
-
-# Look for tailscale0 interface
-# inet 100.64.0.1/32 scope global tailscale0
-```
-
-### Firewall Configuration (if needed)
-```bash
-# Allow Tailscale interface only (example for iptables)
-iptables -A INPUT -i tailscale0 -p tcp --dport 8022 -j ACCEPT
+# Use firewall rules to restrict access
+iptables -A INPUT -p tcp --dport 8022 -s 192.168.1.0/24 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8022 -j DROP
 ```
 
-## 🚀 Production Deployment
+## Production Deployment
 
 ### Systemd Service
+
+Create `/etc/systemd/system/ssh-chat.service`:
+
 ```ini
-# /etc/systemd/system/ssh-chat.service
 [Unit]
-Description=Tailscale SSH Chat Server
-After=tailscaled.service
-Requires=tailscaled.service
+Description=SSH Chat Server
+After=network.target
 
 [Service]
 Type=simple
 User=chat
-Environment="CHAT_PORT=8022"
-Environment="CHAT_TAILSCALE_ONLY=true"
 WorkingDirectory=/opt/ssh-chat
+Environment="CHAT_PORT=8022"
+Environment="CHAT_LOG_FILE=/var/log/ssh-chat/chat.log"
 ExecStart=/opt/ssh-chat/ssh-chat-server
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-### Docker Deployment
-```dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY . .
-RUN go build -o ssh-chat-server cmd/server/main.go
+Enable and start:
 
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-COPY --from=builder /app/ssh-chat-server .
-EXPOSE 8022
-CMD ["./ssh-chat-server"]
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable ssh-chat
+sudo systemctl start ssh-chat
+sudo systemctl status ssh-chat
 ```
 
-## 🔍 Troubleshooting
+### Nginx Reverse Proxy (TCP Stream)
+
+```nginx
+# /etc/nginx/nginx.conf
+stream {
+    server {
+        listen 8022;
+        proxy_pass localhost:8022;
+        proxy_timeout 1s;
+        proxy_connect_timeout 1s;
+    }
+}
+```
+
+## Troubleshooting
 
 ### Connection Issues
+
 ```bash
 # Check if server is running
 netstat -tlnp | grep 8022
 
-# Check Tailscale connectivity
-ping 100.123.45.67  # Your server's Tailscale IP
+# Test local connection
+ssh localhost -p 8022
 
 # Check server logs
 tail -f secure_chat.log
 ```
 
-### Permission Issues
-```bash
-# Ensure SSH host key exists
-ssh-keygen -t rsa -f ~/.ssh/id_rsa -N ""
+### Common Errors
 
-# Check file permissions
-chmod 600 ~/.ssh/id_rsa
+**"PTY required for chat"**
+```bash
+# Use the -t flag to force PTY allocation
+ssh -t user@host -p 8022
 ```
 
-## 📝 License
+**"no host key found"**
+```bash
+# Generate SSH host key
+ssh-keygen -t rsa -f test_host_key -N ""
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### Debug Mode
 
-## 🙏 Acknowledgments
+```bash
+# Run with verbose logging
+go run cmd/server/main.go
+```
 
-- [Tailscale](https://tailscale.com) for zero-trust networking
-- [gliderlabs/ssh](https://github.com/gliderlabs/ssh) for SSH server functionality
-- Go community for excellent networking libraries
+## License
+
+This project is licensed under the MIT License.
+
+## Acknowledgments
+
+- [gliderlabs/ssh](https://github.com/gliderlabs/ssh) - Excellent SSH server library for Go
+- [golang.org/x/term](https://pkg.go.dev/golang.org/x/term) - Terminal handling

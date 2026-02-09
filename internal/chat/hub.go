@@ -29,8 +29,6 @@ func (h *Hub) Broadcast(msg string, sender *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Extract username from message format "[username]: message"
-	// or use sender's name directly if available
 	user := "system"
 	messageContent := msg
 

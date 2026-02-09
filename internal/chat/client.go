@@ -16,7 +16,7 @@ type Client struct {
 	Name   string
 }
 
-// readWriter combines an io.Reader and io.Writer into an io.ReadWriter
+// NOTE: readWriter combines an io.Reader and io.Writer into an io.ReadWriter
 type readWriter struct {
 	io.Reader
 	io.Writer

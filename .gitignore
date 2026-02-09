@@ -220,3 +220,10 @@ docker-compose.override.yml
 *.epub
 *.mobi
 *.tex
+
+# SSH Chat Server specific
+ssh-chat-server
+test_host_key
+test_host_key.pub
+secure_chat.log
+keys/
